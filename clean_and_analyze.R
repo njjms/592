@@ -18,6 +18,7 @@ n <- dim(data)[2] - 3
 fulldf <- cbind(df, coral_status)
 
 # Sanity checking that things are there and that we can filter correctly
+fulldf[,dim(fulldf)[2] - 1]
 unique(fulldf$Feeding)
 corals <- fulldf[fulldf$Feeding == "Corallivore",]
 noncorals <- fulldf[fulldf$Feeding == "Non-corallivore",]
@@ -66,36 +67,55 @@ for (i in columns) {
 }
 
 # Ties produce NaN (aka when we have nothing but 0s)
-length(pvals[pvals == "NaN"])
+length(pvals[pvals != "NaN"])
+hist(pvals[pvals != "NaN"],
+     main = "Histogram of Uncorrected p-values from 1094 Mann-Whitney U tests",
+     xlab = "p-values")
+remove_i <- which(pvals == "NaN")
+remove_i
+pvals <- pvals[-remove_i]
+otus <- columns[-remove_i]
+
+length(pvals); length(otus)
 
 # allp is a dataframe with the OTUs and corresponding Mann Whitney p-value
-allp <- as.data.frame(cbind(columns, pvals)) %>% filter(pvals != 'NaN')
+allp <- as.data.frame(cbind(otus, pvals))
 colnames(allp) <- c("taxa", "pvalues")
+library(ggplot2)
+ggplot(aes(x = pvalues), data = allp) + geom_histogram(fill = "dodgerblue1", bins = 50) +
+  ggtitle("Histogram of Uncorrected p-values")
 head(allp)
+str(allp$pvalues)
 
-which(pvals <= .05)
+which(allp$pvalues <= .05)
+length(which(allp$pvalues <= .05))
 
 # Bonferroni correction
+length(order(allp$pvalues))
+allp <- allp[order(allp$pvalues),]
+m <- length(allp$pvalues); m
 
-p.sorted <- sort(pvals)
-m <- length(pvals)
-
-p.bonferroni <- pmin(m*p.sorted, 1)
-p.bonferroni
-which(p.bonferroni <= .05)
+allp$p.bonferroni <- pmin(m*allp$pvalues, 1)
+head(allp)
+ggplot(aes(x = p.bonferroni), data = allp) + geom_histogram(fill = "dodgerblue1", bins = 50) +
+  ggtitle("Histogram of Benjamini-Hochberg Corrected P-values")
+which(allp$p.bonferroni <= .05)
 
 # Benjamini-Hochberg Procedure
 
-p.hochberg <- p.adjust(p.sorted, method = "hochberg")
-p.hochberg
-which(p.hochberg <= .05)
+allp$p.hochberg <- p.adjust(allp$pvalues, method = "BH")
+ggplot(aes(x = p.hochberg), data = allp) + geom_histogram(fill = "dodgerblue1", bins = 50) +
+  ggtitle("Histogram of Benjamini-Hochberg Corrected P-values")
+summary(allp)
+which(allp$p.hochberg <= .05)
+head(allp)
 
 # Q-values
-
 install.packages("BiocManager")
 BiocManager::install("qvalue", version = "3.8")
 browseVignettes("qvalue")
 
 library(qvalue)
-qobj <- qvalue(p = pvals)
-qobj
+qobj <- qvalue(p = allp$pvalues)
+allp$qvalues <- (qobj$qvalues)
+head(allp, n = 50)
